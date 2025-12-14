@@ -22,8 +22,10 @@ export async function Ai(config: TConfigAi, promt: { system?: string; user: stri
 			messages,
 			format: undefined,
 			options: {
-				temperature: 0.1,
+				temperature: config.temperature || config.temperature === 0 ? config.temperature : undefined,
 				num_ctx: num_ctx,
+				top_k: config.top_k || config.top_k === 0 ? config.top_k : undefined,
+				top_p: config.top_p || config.top_p === 0 ? config.top_p : undefined,
 			},
 		}
 
@@ -145,6 +147,8 @@ type TAiRequest = {
 		temperature?: number
 		num_ctx?: number
 		max_tokens?: number
+		top_k?: number
+		top_p?: number
 	}
 }
 

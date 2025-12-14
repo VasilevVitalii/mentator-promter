@@ -22,6 +22,24 @@ export const SConfigAi = Type.Object({
 		default: true,
 		description: 'automatically calculate context size based on prompt length',
 	}),
+	temperature: Type.Optional(Type.Number({
+		default: 0.8,
+		description: 'the temperature of the model. Increasing the temperature will make the model answer more creatively',
+		minimum: 0,
+		maximum: 2
+	})),
+	top_k: Type.Optional(Type.Number({
+		default: 40,
+		description: 'limits the selection of tokens to the top K most likely options. Higher values (e.g., 100) give more diversity, lower values (e.g., 10) are more conservative',
+		minimum: 0,
+		maximum: 1000
+	})),
+	top_p: Type.Optional(Type.Number({
+		default: 0.95,
+		description: 'works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text',
+		minimum: 0,
+		maximum: 1
+	})),
 	timeout: Type.Number({
 		default: 600000,
 		description: 'request timeout in milliseconds',

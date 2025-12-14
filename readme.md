@@ -74,6 +74,9 @@ Example configuration:
       "model": "deepseek-coder:6.7b",
       "num_ctx": 32768,
       "is_num_ctx_dynamic": true,
+      "temperature": 0.8,  // optional: creativity level (0-2)
+      "top_k": 40,         // optional: token selection limit
+      "top_p": 0.95,       // optional: cumulative probability threshold
       "timeout": 600000
     }
   ],
@@ -147,6 +150,9 @@ $$end
 - `model`: Model name
 - `num_ctx`: Maximum context size
 - `is_num_ctx_dynamic`: Automatically calculate context size based on prompt length
+- `temperature`: (optional) Controls randomness/creativity of responses (0-2). Higher values (e.g., 1.5) make output more creative, lower values (e.g., 0.3) more focused and deterministic
+- `top_k`: (optional) Limits token selection to top K most likely options (0-1000). Higher values (e.g., 100) give more diversity, lower values (e.g., 10) are more conservative
+- `top_p`: (optional) Cumulative probability threshold (0-1). Works with top_k. Higher values (e.g., 0.95) lead to more diverse text, lower values (e.g., 0.5) generate more focused text
 - `timeout`: Request timeout in milliseconds
 
 ### Prompts
