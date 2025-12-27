@@ -1,5 +1,5 @@
 {
-    "version": "1.0.1",
+    "version": "1.0.2",
     "name": "mentator-promter",
     "module": "src/index.ts",
     "type": "module",

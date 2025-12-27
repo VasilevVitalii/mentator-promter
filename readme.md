@@ -77,6 +77,7 @@ Example configuration:
       "temperature": 0.8,  // optional: creativity level (0-2)
       "top_k": 40,         // optional: token selection limit
       "top_p": 0.95,       // optional: cumulative probability threshold
+      "format": "json",    // optional: output format (see below)
       "timeout": 600000
     }
   ],
@@ -153,6 +154,39 @@ $$end
 - `temperature`: (optional) Controls randomness/creativity of responses (0-2). Higher values (e.g., 1.5) make output more creative, lower values (e.g., 0.3) more focused and deterministic
 - `top_k`: (optional) Limits token selection to top K most likely options (0-1000). Higher values (e.g., 100) give more diversity, lower values (e.g., 10) are more conservative
 - `top_p`: (optional) Cumulative probability threshold (0-1). Works with top_k. Higher values (e.g., 0.95) lead to more diverse text, lower values (e.g., 0.5) generate more focused text
+- `format`: (optional) Output format for AI responses. See [Ollama Structured Outputs](https://ollama.com/blog/structured-outputs) for details. Three options:
+  - `null` or omit: No formatting (default)
+  - `"json"`: Basic JSON formatting - AI will return valid JSON
+  - JSON Schema object: Structured output with validation
+    - **Object example** (person data):
+      ```jsonc
+      {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "age": { "type": "number" },
+          "email": { "type": "string" },
+          "is_active": { "type": "boolean" }
+        },
+        "required": ["name", "age"]
+      }
+      ```
+    - **Array example** (list of tasks):
+      ```jsonc
+      {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "task": { "type": "string" },
+            "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+            "completed": { "type": "boolean" }
+          },
+          "required": ["task", "priority"]
+        }
+      }
+      ```
+  - **Tip**: Set `temperature: 0` for deterministic JSON output
 - `timeout`: Request timeout in milliseconds
 
 ### Prompts

@@ -40,6 +40,14 @@ export const SConfigAi = Type.Object({
 		minimum: 0,
 		maximum: 1
 	})),
+	format: Type.Optional(
+		Type.Union([
+			Type.Literal('json'),
+			Type.Record(Type.String(), Type.Any())
+		], {
+			description: 'Output format: "json" for basic JSON or JSON Schema object {"type": "object", "properties": {...}, "required": [...]} for structured output'
+		})
+	),
 	timeout: Type.Number({
 		default: 600000,
 		description: 'request timeout in milliseconds',

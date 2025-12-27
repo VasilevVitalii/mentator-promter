@@ -20,7 +20,7 @@ export async function Ai(config: TConfigAi, promt: { system?: string; user: stri
 		const requestBody: TAiRequest = {
 			model: config.model,
 			messages,
-			format: undefined,
+			format: config.format,
 			options: {
 				temperature: config.temperature || config.temperature === 0 ? config.temperature : undefined,
 				num_ctx: num_ctx,
@@ -142,7 +142,7 @@ type TAiMessage = {
 type TAiRequest = {
 	model: string
 	messages: TAiMessage[]
-	format: 'json' | undefined
+	format: 'json' | Record<string, any> | undefined
 	options?: {
 		temperature?: number
 		num_ctx?: number
