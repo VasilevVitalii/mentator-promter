@@ -1,0 +1,8 @@
+$$begin
+$$options
+temperature=0.5
+$$user
+{{code}}
+$$segment=mentator-llm-service
+{"useGrammar":false}
+$$end

@@ -19,13 +19,13 @@
         "buildjs": "npm run prebuild && node_modules/.bin/tsc --outDir distjs && tsc-esm-fix distjs"
     },
     "dependencies": {
-        "@sinclair/typebox": "^0.34.41",
+        "@sinclair/typebox": "^0.34.47",
         "@types/minimist": "^1.2.5",
-        "comment-json": "^4.4.1",
+        "comment-json": "^4.5.1",
         "crypto": "^1.0.1",
         "jsonc-parser": "^3.3.1",
         "minimist": "^1.2.8",
-        "vv-ai-promt-store": "^1.0.1",
+        "vv-ai-promt-store": "^2.0.2",
         "vv-config-jsonc": "^1.0.6"
     }
 }

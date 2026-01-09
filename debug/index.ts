@@ -9,62 +9,22 @@ Go({
 		mode: ELoggerMode.REWRITE,
 	},
 	prompt: {
-		dir: './debug/promt',
-		payload: {
-			dir: './debug/ddl',
+		dir: './debug/ddl',
+		template: {
+			file: './debug/promt-ddl.txt',
 			replace: '{{code}}',
-		},
-		verify_hash: true
+		}
 	},
 	answer: {
 		dir: './debug/answer',
+		hashDir: './debug/hash'
 	},
-	ai: [
-		{
-			url: 'http://localhost:11434',
-			model: 'qwen2.5-coder:32b',
-			num_ctx: 32768,
-			timeout: 300000,
-			is_num_ctx_dynamic: true,
-			format: {
-				type: 'array',
-				items: {
-					type: 'array',
-					properties: {
-						object_kind: {type: 'string'},
-						object_name: {type: 'string'},
-						database_name: {type: 'string'},
-						schema_name: {type: 'string'},
-						line_start: {type: 'number'},
-						line_stop: {type: 'number'},
-					},
-					required : ['object_kind', 'object_name', 'schema_name']
-				}
-			},
-			temperature: 0
-		},
-		{
-			url: 'http://localhost:11434',
-			model: 'qwen2.5-coder:14b-instruct',
-			num_ctx: 32768,
-			timeout: 300000,
-			is_num_ctx_dynamic: true,
-			format: {
-				type: 'array',
-				items: {
-					type: 'array',
-					properties: {
-						object_kind: {type: 'string'},
-						object_name: {type: 'string'},
-						database_name: {type: 'string'},
-						schema_name: {type: 'string'},
-						line_start: {type: 'number'},
-						line_stop: {type: 'number'},
-					},
-					required : ['object_kind', 'object_name', 'schema_name']
-				}
-			},
-			temperature: 0
-		},
-	],
+	ai: {
+		kind: 'mentator',
+		//url: 'http://localhost:11434',
+		//model: 'qwen2.5-coder:14b-instruct',
+		url: 'http://127.0.0.1:8099',
+		model: 'Qwen2.5-Coder-7B-Instruct-Q5_K_M.0.gguf',
+		timeout: 600000
+	},
 })

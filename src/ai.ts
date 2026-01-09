@@ -1,38 +1,57 @@
+import { CheckJsonSchema, ToPromtOptionsLlamaCpp, ToPromtOptionsOllama, ToPromtOptionsOpenAi, type TPromt } from 'vv-ai-promt-store'
 import type { TConfigAi } from './config'
 import type { TResult } from './tresult'
+import type { format } from 'jsonc-parser'
 
-export async function Ai(config: TConfigAi, promt: { system?: string; user: string }): Promise<TResult<string>> {
+export async function Ai(config: TConfigAi, promt: TPromt, jsonresponse?: string): Promise<TResult<string>> {
 	try {
-		const messages: TAiMessage[] = []
-		if (promt.system) {
-			messages.push({ role: 'system', content: promt.system })
+		switch (config.kind) {
+			case 'mentator':
+				return AiMentator(config, promt, jsonresponse)
+			case 'openapi':
+				return AiOpenApi(config, promt, jsonresponse)
+			case 'ollama':
+				return AiOllama(config, promt, jsonresponse)
+			default:
+				throw new Error(`unknown kind AI API ${config.kind}`)
 		}
-		messages.push({ role: 'user', content: promt.user })
+	} catch (error) {
+		return { ok: false, error: `${error}` }
+	}
+}
 
-		const promptTokens = estimateTokens((promt.system || '') + promt.user)
-		const answerReserve = 1024
-		const ctxRaw = promptTokens + answerReserve
-		const ctxRounded = roundUpToPowerOfTwo(ctxRaw)
-		const num_ctx = config.is_num_ctx_dynamic
-			? (ctxRounded < config.num_ctx ? ctxRounded : config.num_ctx)
-			: config.num_ctx
+type TOpenApiResponse = {
+	choices: Array<{
+		message: {
+			role: string
+			content: string
+		}
+		finish_reason: string
+	}>
+}
 
-		const requestBody: TAiRequest = {
+async function AiOpenApi(config: TConfigAi, promt: TPromt, jsonresponse?: string): Promise<TResult<string>> {
+	try {
+		if (jsonresponse) {
+			const validationError = CheckJsonSchema(jsonresponse)
+			if (validationError) {
+				throw new Error(`on check jsonresponse: ${validationError}`)
+			}
+		}
+
+		const requestPayload = {
 			model: config.model,
-			messages,
-			format: config.format,
-			options: {
-				temperature: config.temperature || config.temperature === 0 ? config.temperature : undefined,
-				num_ctx: num_ctx,
-				top_k: config.top_k || config.top_k === 0 ? config.top_k : undefined,
-				top_p: config.top_p || config.top_p === 0 ? config.top_p : undefined,
-			},
+			stream: false,
+			messages: [
+				{ role: 'user', content: promt.user },
+				{ role: 'system', content: promt.system },
+			].filter(f => f.content),
+			...ToPromtOptionsOpenAi(promt.options || {}, jsonresponse),
 		}
 
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
 		}
-
 		if (config.api_key) {
 			headers['Authorization'] = `Bearer ${config.api_key}`
 		}
@@ -44,7 +63,7 @@ export async function Ai(config: TConfigAi, promt: { system?: string; user: stri
 			const response = await fetch(`${config.url}/v1/chat/completions`, {
 				method: 'POST',
 				headers,
-				body: JSON.stringify(requestBody),
+				body: JSON.stringify(requestPayload),
 				signal: controller.signal,
 			})
 
@@ -54,14 +73,14 @@ export async function Ai(config: TConfigAi, promt: { system?: string; user: stri
 				const errorText = await response.text()
 				return {
 					ok: false,
-					error: `AI API error (status=${response.status}, num_ctx=${num_ctx}): ${errorText}`,
+					error: `Ollama API error (status=${response.status}): ${errorText}`,
 				}
 			}
 
-			const data = (await response.json()) as TAiResponse
+			const data = (await response.json()) as TOpenApiResponse
 
 			if (!data.choices || data.choices.length === 0) {
-				return { ok: false, error: `AI API returned no choices (num_ctx=${num_ctx})` }
+				return { ok: false, error: 'Ollama API returned no choices' }
 			}
 
 			const content = data.choices[0]?.message?.content
@@ -70,94 +89,176 @@ export async function Ai(config: TConfigAi, promt: { system?: string; user: stri
 		} catch (error) {
 			clearTimeout(timeoutId)
 			if ((error as Error).name === 'AbortError') {
-				return { ok: false, error: `AI request timeout after ${config.timeout}ms` }
+				return { ok: false, error: `Ollama request timeout after ${config.timeout}ms` }
 			}
 			throw error
 		}
 	} catch (error) {
-		return { ok: false, error: `AI request failed: ${error}` }
+		return { ok: false, error: `OpenApi request failed: ${error}` }
 	}
 }
 
-/**
- * Extract JSON from AI response by finding first { or [ and last matching closing bracket
- */
-function extractJson(content: string): { error?: string; data?: any } {
-	try {
-		// Find first occurrence of { or [
-		const openBrace = content.indexOf('{')
-		const openBracket = content.indexOf('[')
-
-		// Choose the one that appears first
-		let start = -1
-		let closingChar = ''
-
-		if (openBrace !== -1 && openBracket !== -1) {
-			start = Math.min(openBrace, openBracket)
-			closingChar = start === openBrace ? '}' : ']'
-		} else if (openBrace !== -1) {
-			start = openBrace
-			closingChar = '}'
-		} else if (openBracket !== -1) {
-			start = openBracket
-			closingChar = ']'
-		} else {
-			return { error: 'No JSON object or array found in AI response' }
-		}
-
-		// Find last occurrence of corresponding closing bracket
-		const end = content.lastIndexOf(closingChar)
-
-		if (end === -1 || end <= start) {
-			return { error: 'No matching closing bracket found in AI response' }
-		}
-
-		// Extract and parse JSON
-		const jsonStr = content.substring(start, end + 1)
-		const data = JSON.parse(jsonStr)
-		return { data }
-	} catch (error) {
-		return { error: `Failed to parse JSON from AI response: "${error}"` }
-	}
-}
-
-function estimateTokens(text: string): number {
-	return Math.ceil(text.length / 3.5)
-}
-
-function roundUpToPowerOfTwo(n: number): number {
-	if (n < 1) return 1
-	return 2 ** Math.ceil(Math.log2(n))
-}
-
-// ============================================
-// AI Request/Response Types
-// ============================================
-
-type TAiMessage = {
-	role: 'system' | 'user' | 'assistant'
-	content: string
-}
-
-type TAiRequest = {
+type TOllamaResponse = {
 	model: string
-	messages: TAiMessage[]
-	format: 'json' | Record<string, any> | undefined
-	options?: {
-		temperature?: number
-		num_ctx?: number
-		max_tokens?: number
-		top_k?: number
-		top_p?: number
+	created_at: string
+	message: {
+		role: string
+		content: string
+	}
+	done: boolean
+	done_reason?: string
+	total_duration?: number
+	load_duration?: number
+	prompt_eval_count?: number
+	eval_count?: number
+	eval_duration?: number
+}
+
+async function AiOllama(config: TConfigAi, promt: TPromt, jsonresponse?: string): Promise<TResult<string>> {
+	try {
+		const options = ToPromtOptionsOllama(promt.options || {})
+
+		const requestPayload: Record<string, any> = {
+			model: config.model,
+			stream: false,
+			messages: [
+				{ role: 'user', content: promt.user },
+				{ role: 'system', content: promt.system },
+			].filter(f => f.content),
+		}
+
+		if (Object.keys(options).length > 0) {
+			requestPayload.options = options
+		}
+
+		if (jsonresponse) {
+			const validationError = CheckJsonSchema(jsonresponse)
+			if (validationError) {
+				throw new Error(`on check jsonresponse: ${validationError}`)
+			}
+			requestPayload.format = JSON.parse(jsonresponse)
+		}
+
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+		}
+		if (config.api_key) {
+			headers['Authorization'] = `Bearer ${config.api_key}`
+		}
+
+		const controller = new AbortController()
+		const timeoutId = setTimeout(() => controller.abort(), config.timeout)
+
+		try {
+			const response = await fetch(`${config.url}/api/chat`, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify(requestPayload),
+				signal: controller.signal,
+			})
+
+			clearTimeout(timeoutId)
+
+			if (!response.ok) {
+				const errorText = await response.text()
+				return {
+					ok: false,
+					error: `Ollama API error (status=${response.status}): ${errorText}`,
+				}
+			}
+
+			const data = (await response.json()) as TOllamaResponse
+
+			if (!data.message || !data.message.content) {
+				return { ok: false, error: 'Ollama API returned no message content' }
+			}
+
+			return { ok: true, result: data.message.content }
+		} catch (error) {
+			clearTimeout(timeoutId)
+			if ((error as Error).name === 'AbortError') {
+				return { ok: false, error: `Ollama request timeout after ${config.timeout}ms` }
+			}
+			throw error
+		}
+	} catch (error) {
+		return { ok: false, error: `Ollama request failed: ${error}` }
 	}
 }
 
-type TAiResponse = {
-	choices: Array<{
-		message: {
-			role: string
-			content: string
+type TMentatorResponse = {
+	duration: {
+		promtMsec: number
+		queueMsec: number
+	}
+	result: {
+		loadModelStatus: 'load' | 'exists'
+		data: any
+	}
+}
+
+type TMentatorErrorResponse = {
+	duration: {
+		promtMsec: number
+		queueMsec: number
+	}
+	error: string
+}
+
+async function AiMentator(config: TConfigAi, promt: TPromt, jsonresponse?: string): Promise<TResult<string>> {
+	try {
+		const requestPayload: Record<string, any> = {
+			model: config.model,
+			message: {
+				user: promt.user,
+				system: promt.system
+			},
+			durationMsec: config.timeout,
+			options: promt.options
 		}
-		finish_reason: string
-	}>
+
+		if (jsonresponse) {
+			const validationError = CheckJsonSchema(jsonresponse)
+			if (validationError) {
+				throw new Error(`on check jsonresponse: ${validationError}`)
+			}
+			requestPayload.format = {
+				useGrammar: true,
+				jsonSchema: JSON.parse(jsonresponse)
+			}
+		}
+
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+		}
+		if (config.api_key) {
+			headers['Authorization'] = `Bearer ${config.api_key}`
+		}
+
+		const response = await fetch(`${config.url}/promt`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify(requestPayload),
+		})
+
+		if (!response.ok) {
+			const errorData = (await response.json()) as TMentatorErrorResponse
+			return {
+				ok: false,
+				error: `Mentator API error (status=${response.status}): ${errorData.error}`,
+			}
+		}
+
+		const data = (await response.json()) as TMentatorResponse
+
+		if (!data.result || data.result.data === undefined) {
+			return { ok: false, error: 'Mentator API returned no data' }
+		}
+
+		const resultString = typeof data.result.data === 'string' ? data.result.data : JSON.stringify(data.result.data)
+
+		return { ok: true, result: resultString }
+	} catch (error) {
+		return { ok: false, error: `Mentator request failed: ${error}` }
+	}
 }

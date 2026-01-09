@@ -1,11 +1,11 @@
 import { join, parse, resolve } from 'path'
-import { type TConfig, type TConfigAi } from './config'
+import { TemplateRead, type TConfig, type TConfigAi } from './config'
 import { GetLogger, Logger } from './logger'
 import { fsReadDir } from './util/fsReadDir'
-import { PromtLoad, type TPromt } from 'vv-ai-promt-store'
-import { fsReadFile } from './util/fsReadFile'
+import { PromtLoad, type TPromt, CheckJsonSchema, ConvertJsonSchemaToGbnf } from 'vv-ai-promt-store'
+import { fsReadFile, fsReadFileSync } from './util/fsReadFile'
 import { Ai } from './ai'
-import { fsWriteFile } from './util/fsWriteFile'
+import { fsWriteFileSync } from './util/fsWriteFile'
 import { gethash } from './util/hash'
 
 export async function Go(config: TConfig): Promise<void> {
@@ -18,136 +18,85 @@ export async function Go(config: TConfig): Promise<void> {
 		}
 		const logger = getLogger.logger!
 		logger.debug('APP START')
-		logger.debug(`model in config: ${config.ai.length}`)
+		logger.debug(`model in config: "${config.ai.model}"`)
+
+		const templateReadRes = TemplateRead(config.prompt.template.file)
+		if (!templateReadRes.ok) {
+			logger.error(templateReadRes.error)
+			return
+		}
+		if (templateReadRes.result.jsonresponse) {
+			if (config.ai.kind === 'openapi' || config.ai.kind === 'ollama' || config.ai.kind === 'mentator') {
+				const errorJsonSchema = CheckJsonSchema(templateReadRes.result.jsonresponse)
+				if (errorJsonSchema) {
+					logger.error(`on check json schema from "${config.prompt.template.file}": `, errorJsonSchema)
+					return
+				}
+				if (config.ai.kind === 'mentator') {
+					const resultGbnf = ConvertJsonSchemaToGbnf(JSON.parse(templateReadRes.result.jsonresponse))
+					if ('error' in resultGbnf) {
+						logger.error(`on ckeck GBNF format from "${config.prompt.template.file}": `, resultGbnf.error)
+						return
+					}
+				}
+			}
+		}
+		logger.debug(`load template from "${config.prompt.template.file}"`)
 
 		const fsReadDirPromtRes = await fsReadDir(resolve(config.prompt.dir))
 		if (!fsReadDirPromtRes.ok) {
 			logger.error(`on scan config.prompt.dir`, fsReadDirPromtRes.error)
 			return
 		}
-		const promtFileList = fsReadDirPromtRes.result
-		logger.debug(`in config.prompt.dir "${config.prompt.dir}" find files: ${promtFileList.length}`)
+		logger.debug(`in config.prompt.dir "${config.prompt.dir}" find file(s): ${fsReadDirPromtRes.result.length}`)
 
-		if (config.prompt.payload) {
-			const fsReadDirPayloadRes = await fsReadDir(config.prompt.payload.dir)
-			if (!fsReadDirPayloadRes.ok) {
-				logger.error(`on scan config.prompt.payload.dir`, fsReadDirPayloadRes.error)
-				return
+		for (const promtFile of fsReadDirPromtRes.result) {
+			const promtFullFile = join(config.prompt.dir, promtFile)
+			const readFileRes = fsReadFileSync(promtFullFile)
+			if (!readFileRes.ok) {
+				logger.error(`on read promt file: ${readFileRes.error}`)
+				continue
 			}
-			const payloadFileList = fsReadDirPayloadRes.result
-			logger.debug(`in config.prompt.payload "${config.prompt.payload.dir}" find files: ${payloadFileList.length}`)
+			const readHashFile = gethash(readFileRes.result)
 
-			for (let payloadIdx = 0; payloadIdx < payloadFileList.length; payloadIdx++) {
-				const payloadFile = payloadFileList[payloadIdx]
-				if (!payloadFile) continue
-				logger.debug(
-					`[${(payloadIdx + 1).toString().padStart(5, '0')}/${payloadFileList.length.toString().padStart(5, '0')}] process file "${payloadFile}"`,
-				)
-
-				const payloadFileFullName = join(config.prompt.payload.dir, payloadFile)
-				const payloadFileRes = await fsReadFile(payloadFileFullName)
-				if (!payloadFileRes.ok) {
-					logger.error(`on read payload file "${payloadFileFullName}"`, payloadFileRes.error)
+			if (config.answer.hashDir) {
+				const hashFullFile = join(config.answer.hashDir, `${promtFile}.hash`)
+				const readHashRes = fsReadFileSync(hashFullFile)
+				if (!readHashRes.ok) {
+					logger.error(`on read hash file: ${readHashRes.error}`)
 					continue
 				}
-				const p = parse(payloadFile)
-				const answerDir = join(config.answer.dir, payloadFile)
-				const hashFullFileName = join(answerDir, `${p.name}${p.ext}.hash.txt`)
-				const currentHash = gethash(payloadFileRes.result)
-
-				// Check if we should skip this file based on hash
-				if (config.prompt.verify_hash) {
-					const savedHashRes = await fsReadFile(hashFullFileName)
-					if (savedHashRes.ok && currentHash === savedHashRes.result) {
-						logger.debug(`     ignore file (hash not changed) "${payloadFile}"`)
-						continue
-					}
-				}
-
-				let hasErrors = false
-
-				// Process all prompts for this payload file
-				for (let promtFileIdx = 0; promtFileIdx < promtFileList.length; promtFileIdx++) {
-					const promtFile = promtFileList[promtFileIdx]
-					if (!promtFile) continue
-					const promtFileFullName = join(config.prompt.dir, promtFile)
-					const promtFileRes = await fsReadFile(promtFileFullName)
-					if (!promtFileRes.ok) {
-						logger.error(`on read promt file "${promtFileFullName}"`, promtFileRes.error)
-						hasErrors = true
-						continue
-					}
-					const promtList = PromtLoad(promtFileRes.result)
-					for (let promtIdx = 0; promtIdx < promtList.length; promtIdx++) {
-						const promt = promtList[promtIdx]
-						if (!promt) continue
-
-						const userText = promt.user.replaceAll(config.prompt.payload.replace, payloadFileRes.result)
-						const answerFileName = `${p.name}${p.ext}.answer-${promtFileIdx}-${promtIdx}-{aiIdx}.txt`
-
-						const processResult = await processPromt({ user: userText, system: promt.system }, config.ai, answerDir, answerFileName, logger)
-						if (!processResult) {
-							hasErrors = true
-						}
-					}
-				}
-
-				// Save hash only if all prompts were processed successfully
-				if (!hasErrors) {
-					const saveHashRes = await fsWriteFile(hashFullFileName, currentHash)
-					if (!saveHashRes.ok) {
-						logger.error(`on save hash for file "${payloadFileFullName}"`, saveHashRes.error)
-					}
-				}
-			}
-		} else {
-			for (let promtFileIdx = 0; promtFileIdx < promtFileList.length; promtFileIdx++) {
-				const promtFile = promtFileList[promtFileIdx]
-				if (!promtFile) continue
-				logger.debug(
-					`[${(promtFileIdx + 1).toString().padStart(5, '0')}/${promtFileList.length.toString().padStart(5, '0')}] process file "${promtFile}"`,
-				)
-				const promtFileFullName = join(config.prompt.dir, promtFile)
-				const promtFileRes = await fsReadFile(promtFileFullName)
-				if (!promtFileRes.ok) {
-					logger.error(`on read promt file "${promtFileFullName}"`, promtFileRes.error)
+				if (readHashRes.result === readHashFile) {
+					logger.debug(`hash not changed, skip file ${promtFile}`)
 					continue
 				}
-				const p = parse(promtFile)
-				const answerDir = join(config.answer.dir, promtFile)
-				const hashFullFileName = join(answerDir, `${p.name}${p.ext}.hash.txt`)
-				const currentHash = gethash(promtFileRes.result)
+			}
 
-				// Check if we should skip this file based on hash
-				if (config.prompt.verify_hash) {
-					const savedHashRes = await fsReadFile(hashFullFileName)
-					if (savedHashRes.ok && currentHash === savedHashRes.result) {
-						logger.debug(`     ignore file (hash not changed) "${promtFile}"`)
-						continue
-					}
-				}
+			const endpointPromt = { ...templateReadRes.result }
+			endpointPromt.user = endpointPromt.user.replaceAll(config.prompt.template.replace, readFileRes.result)
+			if (endpointPromt.system) {
+				endpointPromt.system = endpointPromt.system.replaceAll(config.prompt.template.replace, readFileRes.result)
+			}
 
-				let hasErrors = false
+			const aiRes = await Ai(config.ai, endpointPromt, templateReadRes.result.jsonresponse)
+			if (!aiRes.ok) {
+				logger.error(`on get answer for "${promtFile}": ${aiRes.error}`)
+				continue
+			}
 
-				const promtList = PromtLoad(promtFileRes.result)
-				for (let promtIdx = 0; promtIdx < promtList.length; promtIdx++) {
-					const promt = promtList[promtIdx]
-					if (!promt) continue
+			const answerFullFile = join(config.answer.dir, `${promtFile}.txt`)
+			const saveAnswerFileRes = fsWriteFileSync(answerFullFile, aiRes.result)
+			if (!saveAnswerFileRes.ok) {
+				logger.error(`on save answer: ${saveAnswerFileRes.error}`)
+				continue
+			}
 
-					const answerFileName = `${p.name}${p.ext}.answer-${promtIdx}-{aiIdx}.txt`
-
-					const processResult = await processPromt(promt, config.ai, answerDir, answerFileName, logger)
-					if (!processResult) {
-						hasErrors = true
-					}
-				}
-
-				// Save hash only if all prompts were processed successfully
-				if (!hasErrors) {
-					const saveHashRes = await fsWriteFile(hashFullFileName, currentHash)
-					if (!saveHashRes.ok) {
-						logger.error(`on save hash for file "${promtFileFullName}"`, saveHashRes.error)
-					}
+			if (config.answer.hashDir) {
+				const hashFullFile = join(config.answer.hashDir, `${promtFile}.hash`)
+				const saveHashRes = fsWriteFileSync(hashFullFile, readHashFile)
+				if (!saveHashRes.ok) {
+					logger.error(`on save hash: ${saveHashRes.error}`)
+					continue
 				}
 			}
 		}
@@ -165,26 +114,4 @@ export async function Go(config: TConfig): Promise<void> {
 			})
 		}
 	}
-}
-
-async function processPromt(promt: TPromt, aiConfigs: TConfigAi[], answerDir: string, answerFileName: string, logger: Logger): Promise<boolean> {
-	let hasErrors = false
-	for (let aiIdx = 0; aiIdx < aiConfigs.length; aiIdx++) {
-		const ai = aiConfigs[aiIdx]
-		if (!ai) continue
-		const resAi = await Ai(ai, { user: promt.user, system: promt.system })
-		if (!resAi.ok) {
-			logger.error(`on promt to ai #${aiIdx}`, resAi.error)
-			hasErrors = true
-			continue
-		}
-		const answerFullFileName = join(answerDir, answerFileName.replace('{aiIdx}', `${aiIdx}`))
-		const fsWriteFileRes = await fsWriteFile(answerFullFileName, resAi.result)
-		if (!fsWriteFileRes.ok) {
-			logger.error(`on write answer:`, fsWriteFileRes.error)
-			hasErrors = true
-			continue
-		}
-	}
-	return !hasErrors
 }

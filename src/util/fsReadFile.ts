@@ -23,7 +23,7 @@ export async function fsReadFile(fullFileName: string): Promise<TResult<string>>
 	}
 }
 
-export function fsReadFileSync(fullFileName: string, text: string): TResult<string> {
+export function fsReadFileSync(fullFileName: string): TResult<string> {
 	let fileExists = false
 	try {
 		accessSync(fullFileName)

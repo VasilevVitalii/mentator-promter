@@ -1,0 +1,66 @@
+$$begin
+$$options
+temperature=0
+topP=0.1
+topK=10
+minP=0
+maxTokens=4096
+repeatPenalty=1
+repeatPenaltyNum=0
+presencePenalty=0
+frequencyPenalty=0
+mirostat=0
+mirostatTau=5
+mirostatEta=0.1
+penalizeNewline=false
+stopSequences=[]
+trimWhitespace=true
+tokenBias={}
+evaluationPriority=5
+contextShiftSize=0
+disableContextShift=false
+$$system
+You are an expert SQL parser. Extract metadata about top-level database objects from DDL scripts.
+$$user
+Parse this MS SQL DDL script and return a JSON array with metadata for each top-level database object (procedures, tables, views, etc.).
+DDL Script:
+{{code}}
+$$jsonresponse
+{
+	"type": "array",
+	"items": {
+		"type": "object",
+		"properties": {
+			"object_kind": {
+				"type": "string"
+			},
+			"object_name": {
+				"type": "string"
+			},
+			"database_name": {
+				"type": "string"
+			},
+			"schema_name": {
+				"type": "string"
+			},
+			"line_start": {
+				"type": "integer"
+			},
+			"line_stop": {
+				"type": "integer"
+			}
+		},
+		"required": [
+			"object_kind",
+			"object_name",
+			"database_name",
+			"schema_name",
+			"line_start",
+			"line_stop"
+		],
+		"additionalProperties": false
+	}
+}
+$$segment=mentator-llm-service
+{"useGrammar":true}
+$$end

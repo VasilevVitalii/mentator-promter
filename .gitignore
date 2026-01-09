@@ -19,6 +19,9 @@ debug/log
 debug/ddl
 debug/promt
 debug/answer
+debug/hash
+debug/error
+debug/promt.txt
 debug/LOG
 debug/DDL
 
