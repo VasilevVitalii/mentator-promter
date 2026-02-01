@@ -3,14 +3,16 @@ import { join } from 'path'
 import { fsWriteFileSync } from './util/fsWriteFile'
 import { readFileSync } from 'fs'
 import { ELoggerMode } from './logger'
-import { PromtLoad, type TPromt } from 'vv-ai-promt-store'
+import { type TPrompt, PromptConvFromString } from 'vv-ai-prompt-format'
 import type { TResult } from './tresult'
 import { fsReadFileSync } from './util/fsReadFile'
 
 export const SConfigAi = Type.Object({
-	kind: Type.Union([Type.Literal('openapi'), Type.Literal('mentator'), Type.Literal('ollama')], {description: 'USE openapi or ollama or llamacpp (mentator-llm-service) API'}),
+	kind: Type.Union([Type.Literal('openapi'), Type.Literal('mentator'), Type.Literal('ollama')], {
+		description: 'USE openapi or ollama or mentator-llm-service API',
+	}),
 	url: Type.String({
-		default: 'http://localhost:11434',
+		default: 'http://localhost:12345',
 		description: 'API URL',
 	}),
 	api_key: Type.Optional(
@@ -20,9 +22,9 @@ export const SConfigAi = Type.Object({
 	),
 	timeout: Type.Number({
 		default: 600000,
-		description: 'request timeout in milliseconds',
+		description: 'default request timeout in milliseconds',
 	}),
-	model: Type.String({ default: 'deepseek-coder:6.7b', description: 'model name' }),
+	model: Type.String({ default: 'deepseek-coder:6.7b', description: 'default model name' }),
 })
 export type TConfigAi = Static<typeof SConfigAi>
 
@@ -30,17 +32,23 @@ export const SConfig = Type.Object({
 	log: Type.Object({
 		dir: Type.String({ description: 'full path to log directory', default: 'path/to/log' }),
 		mode: Type.Enum(ELoggerMode, {
-			description: 'REWRITE - write log to "mentator-promter.log"; APPEND - write log to "mentator-promter.YYYYMMDD-HHMMSS.log"',
+			description: 'REWRITE - write log to "mentator-llm-prompter.log"; APPEND - write log to "mentator-llm-prompter.YYYYMMDD-HHMMSS.log"',
 			default: 'REWRITE',
 		}),
 	}),
 	ai: SConfigAi,
 	prompt: Type.Object({
-		dir: Type.String({ description: 'full path to directory with prompt files', default: 'path/to/prompts' }),
-		template: Type.Object({
-			file: Type.String({ description: 'full path to file with promt template file', default: 'path/to/prompt.template.txt' }),
-			replace: Type.String({ description: 'placeholder in prompt to replace with payload content', default: '{{code}}' }),
-		}),
+		dir: Type.String({ description: 'full path to directory with payload for prompt files', default: 'path/to/prompts' }),
+		templateReplacePayload: Type.Optional(Type.String({ description: 'placeholder in prompt to replace with payload content', default: '{{payload}}' })),
+		templateReplaceJson: Type.Optional(
+			Type.String({
+				description: 'only for ai.kind="mentator" - placeholder in prompt to replace with json (prev response) content',
+				default: '{{json}}',
+			}),
+		),
+		templateFile: Type.Optional(
+			Type.Array(Type.String({ description: 'full path to file with prompt template file', default: 'path/to/prompt.template.txt' })),
+		),
 	}),
 	answer: Type.Object({
 		dir: Type.String({ description: 'full path to directory for storing answer files', default: 'path/to/answers' }),
@@ -50,7 +58,7 @@ export const SConfig = Type.Object({
 export type TConfig = Static<typeof SConfig>
 
 export function ConfigGerenate(fullPath: string): { error?: string; success?: string } {
-	const fullFileName = join(fullPath, `mentator-promter.config.TEMPLATE.jsonc`)
+	const fullFileName = join(fullPath, `mentator-llm-prompter.config.TEMPLATE.jsonc`)
 	try {
 		const conf = new vvConfigJsonc(SConfig).getDefault()
 		const resWrite = fsWriteFileSync(fullFileName, conf.text)
@@ -77,19 +85,35 @@ export function ConfigRead(fullFileName: string): { error?: string; conf?: TConf
 	}
 }
 
-export function TemplateRead(fullFileName: string): TResult<TPromt> {
-	try {
-		const rawRes = fsReadFileSync(fullFileName)
-		if (!rawRes.ok) {
-			return {ok: false, error: `on load template "${fullFileName}": ${rawRes.error}`}
+export function promptTemplateRead(
+	config: TConfig,
+): TResult<{ jsonPipe: boolean; list: { idxFile: number; idxInFile: number; prompt: TPrompt }[] }> {
+	const res = [] as { idxFile: number; idxInFile: number; prompt: TPrompt }[]
+	let idxFile = 0
+	for (const fileName of config.prompt.templateFile || []) {
+		const readFileRes = fsReadFileSync(fileName)
+		if (!readFileRes.ok) {
+			return { ok: false, error: `on read template file: ${readFileRes.error}` }
 		}
-		const promtList = PromtLoad(rawRes.result)
-		const promt = promtList.find(f => f)
-		if (!promt) {
-			return {ok: false, error: `not found template in file "${fullFileName}"`}
+		res.push(
+			...PromptConvFromString(readFileRes.result).map((prompt, idxInFile) => {
+				return {
+					idxFile,
+					idxInFile,
+					prompt,
+				}
+			}),
+		)
+		idxFile++
+	}
+	if (config.ai.kind === 'mentator') {
+		const hasJsonY = res.filter(f => f.prompt.jsonresponse).length > 0 ? true : false
+		const hasJsonN = res.filter(f => !f.prompt.jsonresponse).length > 0 ? true : false
+		if (hasJsonY && hasJsonN) {
+			return { ok: false, error: `all templates must either have a jsonresponse or not have a jsonresponse simultaneously` }
 		}
-		return {ok: true, result: promt}
-	} catch (err) {
-		return {ok: false, error: `on parse template "${fullFileName}": ${err}`}
+		return { ok: true, result: { jsonPipe: hasJsonY, list: res } }
+	} else {
+		return { ok: true, result: { jsonPipe: false, list: res } }
 	}
 }

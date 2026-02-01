@@ -1,31 +1,30 @@
 {
-    "version": "1.0.2",
-    "name": "mentator-promter",
+    "version": "1.0.3",
+    "name": "mentator-llm-prompter",
     "module": "src/index.ts",
     "type": "module",
     "private": true,
     "devDependencies": {
         "@types/bun": "latest",
-        "@types/mssql": "^9.1.8",
-        "@types/oracledb": "^6.10.0",
         "tsc-esm-fix": "^3.1.2",
+        "tsx": "^4.21.0",
         "typescript": "^5.9.3"
     },
     "scripts": {
         "debug": "bun run debug/index.ts",
         "prebuild": "node .auto/prebuild.js",
-        "build:linux": "npm run prebuild && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/mentator-promter && chmod +x dist/mentator-promter",
-        "build:win": "npm run prebuild && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/mentator-promter.exe",
+        "build:linux": "npm run prebuild && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/mentator-prompter && chmod +x dist/mentator-prompter",
+        "build:win": "npm run prebuild && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/mentator-prompter.exe",
         "buildjs": "npm run prebuild && node_modules/.bin/tsc --outDir distjs && tsc-esm-fix distjs"
     },
     "dependencies": {
-        "@sinclair/typebox": "^0.34.47",
+        "@sinclair/typebox": "^0.34.48",
         "@types/minimist": "^1.2.5",
         "comment-json": "^4.5.1",
         "crypto": "^1.0.1",
         "jsonc-parser": "^3.3.1",
         "minimist": "^1.2.8",
-        "vv-ai-promt-store": "^2.0.2",
+        "vv-ai-prompt-format": "^3.0.3",
         "vv-config-jsonc": "^1.0.6"
     }
 }

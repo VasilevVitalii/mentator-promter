@@ -1,5 +1,6 @@
 # dependencies (bun install)
 node_modules
+.vscode
 
 # output
 out
@@ -17,11 +18,11 @@ _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 debug/log
 debug/ddl
-debug/promt
+debug/prompt
 debug/answer
 debug/hash
 debug/error
-debug/promt.txt
+debug/prompt.txt
 debug/LOG
 debug/DDL
 

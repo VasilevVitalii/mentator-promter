@@ -9,22 +9,28 @@ Go({
 		mode: ELoggerMode.REWRITE,
 	},
 	prompt: {
-		dir: './debug/ddl',
-		template: {
-			file: './debug/promt-ddl.txt',
-			replace: '{{code}}',
-		}
+		dir: '/home/vitalii/Work/mentator/test_erp/ddl',
+		templateReplaceJson: '{{json}}',
+		templateReplacePayload: '{{payload}}',
+		templateFile: [
+			'/home/vitalii/Work/mentator/test_erp/promt-ddl_1.txt',
+			'/home/vitalii/Work/mentator/test_erp/promt-ddl_2.txt',
+			'/home/vitalii/Work/mentator/test_erp/promt-ddl_3.txt',
+			'/home/vitalii/Work/mentator/test_erp/promt-ddl_4.txt',
+			'/home/vitalii/Work/mentator/test_erp/promt-ddl_5.txt'
+		]
 	},
 	answer: {
-		dir: './debug/answer',
-		hashDir: './debug/hash'
+		dir: '/home/vitalii/Work/mentator/test_erp/answer',
+		hashDir: '/home/vitalii/Work/mentator/test_erp/answer_hash'
 	},
 	ai: {
 		kind: 'mentator',
 		//url: 'http://localhost:11434',
-		//model: 'qwen2.5-coder:14b-instruct',
-		url: 'http://127.0.0.1:8099',
-		model: 'Qwen2.5-Coder-7B-Instruct-Q5_K_M.0.gguf',
+		model: 'qwen2.5-0.5b-instruct-q5_k_m',
+		url: 'http://127.0.0.1:19777',
+		//model: 'deepseek-coder:6.7b',
+		//model: 'qwen2.5-0.5b-instruct-q5_k_m.gguf',
 		timeout: 600000
 	},
 })
