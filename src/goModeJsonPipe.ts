@@ -40,6 +40,8 @@ async function goPromptTemplate(
 	let lastError = undefined as string | undefined
 
 	for (const templateItem of promptTemplateList) {
+		const errPrefix = `template [file #${templateItem.idxFile}; prompt ${templateItem.idxInFile}]: `
+
 		const prompt = {
 			...templateItem.prompt,
 			system: dualReplace(
@@ -56,13 +58,13 @@ async function goPromptTemplate(
 		}
 		const aiRes = await Ai(config.ai, prompt)
 		if (!aiRes.ok) {
-			lastError = `on get answer: ${aiRes.error}`
+			lastError = `${errPrefix}on get answer: ${aiRes.error}`
 			continue
 		}
 
 		const convertRes = convertAnswer(aiRes.result, templateItem.prompt.segment?.['convert'])
 		if (!convertRes.ok) {
-			lastError = convertRes.error
+			lastError = `${errPrefix}${convertRes.error}`
 			continue
 		}
 
@@ -71,7 +73,7 @@ async function goPromptTemplate(
 		try {
 			resultJson = JSON.parse(convertRes.result)
 		} catch (err) {
-			lastError = `on external convert (template ${templateItem.idxFile}:${templateItem.idxInFile}) answer to JSON: ${err}`
+			lastError = `${errPrefix}on external convert: ${err}`
 			continue
 		}
 
