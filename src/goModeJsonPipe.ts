@@ -40,7 +40,7 @@ async function goPromptTemplate(
 	let lastError = undefined as string | undefined
 
 	for (const templateItem of promptTemplateList) {
-		const errPrefix = `template [file #${templateItem.idxFile}; prompt ${templateItem.idxInFile}]: `
+		const errPrefix = `template [file #${templateItem.idxFile}; prompt #${templateItem.idxInFile}]: `
 
 		const prompt = {
 			...templateItem.prompt,

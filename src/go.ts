@@ -90,7 +90,7 @@ export async function Go(config: TConfig): Promise<void> {
 
 				const modeJsonMipeRes = await goModeJsonPipe(config, payloadRes.result, promptTemplateReadRes.result)
 				if (modeJsonMipeRes.ok) {
-					resultFileList.push({fullFileName: join(config.answer.dir, payloadFileName), fileText: modeJsonMipeRes.result})
+					resultFileList.push({fullFileName: join(config.answer.dir, `${payloadFileName}.json`), fileText: modeJsonMipeRes.result})
 				} else {
 					logger.error(`on process "${payloadFileName}": ${modeJsonMipeRes.error}`)
 				}
@@ -117,7 +117,7 @@ export async function Go(config: TConfig): Promise<void> {
 				}
 				const modeBasicRes = await goModeBasic(config, payloadRes.result)
 				if (modeBasicRes.ok) {
-					resultFileList.push({fullFileName: join(config.answer.dir, payloadFileName), fileText: modeBasicRes.result})
+					resultFileList.push({fullFileName: join(config.answer.dir, `${payloadFileName}.json`), fileText: modeBasicRes.result})
 				} else {
 					logger.error(`on process "${payloadFileName}": ${modeBasicRes.error}`)
 				}
